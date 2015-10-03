@@ -89,7 +89,8 @@ func Generate(config *consul.Config, serviceName string) error {
 		}
 
 		for address, tagsMap := range addressTags {
-			tags := make([]string, 0, len(tagsMap))
+			tags := make([]string, 0, len(tagsMap)+1)
+			tags = append(tags, serviceName)
 			for tag, _ := range tagsMap {
 				tags = append(tags, tag)
 			}
