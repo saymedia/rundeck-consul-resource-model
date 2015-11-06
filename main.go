@@ -17,7 +17,7 @@ type Project struct {
 type Node struct {
 	XMLName        xml.Name `xml:"node"`
 	Name           string   `xml:"name,attr"`
-	Hostname       string   `xml:"hostname,att"`
+	Hostname       string   `xml:"hostname,attr"`
 	Tags           string   `xml:"tags,attr,omitempty"`
 	Username       string   `xml:"username,attr"`
 	DatacenterName string   `xml:"datacenter,attr"`
