@@ -73,6 +73,7 @@ func Generate(config *consul.Config, serviceNames []string) error {
 	for _, dc := range datacenters {
 		options.Datacenter = dc
 		addressTags := make(map[string]map[string]bool)
+		addressName := make(map[string]string)
 		for _, serviceName := range serviceNames {
 			endpoints, _, err := catalog.Service(serviceName, "", options)
 			if err != nil {
@@ -81,6 +82,8 @@ func Generate(config *consul.Config, serviceNames []string) error {
 
 			for _, endpoint := range endpoints {
 				address := endpoint.Address
+				name := endpoint.Node
+				addressName[address] = name
 				if _, ok := addressTags[address]; !ok {
 					addressTags[address] = make(map[string]bool)
 				}
@@ -98,7 +101,7 @@ func Generate(config *consul.Config, serviceNames []string) error {
 				tags = append(tags, tag)
 			}
 			node := Node{
-				Name:     address,
+				Name:     addressName[address],
 				Hostname: address,
 				// TODO: Make username configurable
 				Username:       "ubuntu",
