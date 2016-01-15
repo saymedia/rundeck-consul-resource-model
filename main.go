@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	consul "github.com/hashicorp/consul/api"
 )
@@ -25,15 +27,43 @@ type Node struct {
 
 func main() {
 
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s service-names...\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	serviceNames := os.Args[1:]
+	serviceNames := make([]string, 0, len(os.Args)-1)
+	oneOffTags := make(map[string]string)
 	consulAddr := os.Getenv("CONSUL_ADDRESS")
 	consulScheme := os.Getenv("CONSUL_SCHEME")
 	consulToken := os.Getenv("CONSUL_TOKEN")
+
+	noMoreOptions := false
+	for _, arg := range os.Args[1:] {
+		if !noMoreOptions {
+			if strings.HasPrefix(arg, "--tag-one=") {
+				tagOneVal := arg[10:]
+				parts := strings.SplitN(tagOneVal, ":", 2)
+				oneOffTags[parts[0]] = parts[1]
+				continue
+			} else if arg == "--" {
+				noMoreOptions = true
+				continue
+			} else if strings.HasPrefix(arg, "-") {
+				fmt.Fprintf(os.Stderr, "Unknown option %s\n", arg)
+				os.Exit(1)
+			}
+		}
+
+		serviceNames = append(serviceNames, arg)
+	}
+
+	if len(serviceNames) < 1 {
+		fmt.Fprintf(
+			os.Stderr, "Usage: %s [options] service-names...\n", os.Args[0],
+		)
+		fmt.Fprintf(os.Stderr, "\nOptions:\n")
+		fmt.Fprintf(
+			os.Stderr, "  --tag-one=service:tagname\n",
+		)
+		fmt.Fprintf(os.Stderr, "\n")
+		os.Exit(1)
+	}
 
 	if consulAddr == "" {
 		consulAddr = "127.0.0.1:8500"
@@ -48,14 +78,17 @@ func main() {
 		Token:   consulToken,
 	}
 
-	err := Generate(config, serviceNames)
+	now := time.Now()
+	rand.Seed(now.Unix())
+
+	err := Generate(config, serviceNames, oneOffTags)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(2)
 	}
 }
 
-func Generate(config *consul.Config, serviceNames []string) error {
+func Generate(config *consul.Config, serviceNames []string, oneOffTags map[string]string) error {
 	client, err := consul.NewClient(config)
 	if err != nil {
 		return err
@@ -80,7 +113,11 @@ func Generate(config *consul.Config, serviceNames []string) error {
 				return err
 			}
 
-			for _, endpoint := range endpoints {
+			endpointOrder := rand.Perm(len(endpoints))
+
+			oneOffTag := oneOffTags[serviceName]
+			for _, i := range endpointOrder {
+				endpoint := endpoints[i]
 				address := endpoint.Address
 				name := endpoint.Node
 				addressName[address] = name
@@ -92,6 +129,13 @@ func Generate(config *consul.Config, serviceNames []string) error {
 				}
 				// Add an extra "virtual" tag for the service name.
 				addressTags[address][serviceName] = true
+
+				// If we have a one-off tag on this service, tag it as such
+				if oneOffTag != "" {
+					addressTags[address][oneOffTag] = true
+					// Don't do it for the others
+					oneOffTag = ""
+				}
 			}
 		}
 
